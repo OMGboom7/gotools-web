@@ -1,19 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as minio from '../../api/minio';
+import type { BucketItem, ObjectItem } from '../../api/minio';
 
-const BUCKET_MGMT = 'buckets';
-const BUCKET_DETAIL = 'objects';
+const BUCKET_MGMT = 'buckets' as const;
+const BUCKET_DETAIL = 'objects' as const;
+type Tab = typeof BUCKET_MGMT | typeof BUCKET_DETAIL;
 
 export default function MinioPage() {
-  const [tab, setTab] = useState(BUCKET_MGMT);
-  const [buckets, setBuckets] = useState([]);
+  const [tab, setTab] = useState<Tab>(BUCKET_MGMT);
+  const [buckets, setBuckets] = useState<BucketItem[]>([]);
   const [bucket, setBucket] = useState('');
-  const [objects, setObjects] = useState([]);
+  const [objects, setObjects] = useState<ObjectItem[]>([]);
   const [prefix, setPrefix] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const showError = useCallback((msg) => {
+  const showError = useCallback((msg: string) => {
     setError(msg);
     setTimeout(() => setError(''), 3000);
   }, []);
@@ -24,8 +26,9 @@ export default function MinioPage() {
     try {
       const { data } = await minio.listBuckets();
       setBuckets(data.buckets || []);
-    } catch (e) {
-      showError('获取桶列表失败: ' + (e.response?.data?.error || e.message));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      showError('获取桶列表失败: ' + (err.response?.data?.error || err.message || ''));
     } finally {
       setLoading(false);
     }
@@ -40,26 +43,28 @@ export default function MinioPage() {
     try {
       await minio.createBucket(name);
       await loadBuckets();
-      showError('');
-    } catch (e) {
-      showError('创建桶失败: ' + (e.response?.data?.error || e.message));
+      setError('');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      showError('创建桶失败: ' + (err.response?.data?.error || err.message || ''));
     }
   };
 
   // ── 删除桶 ──
-  const handleDeleteBucket = async (name) => {
+  const handleDeleteBucket = async (name: string) => {
     if (!confirm(`确定删除桶「${name}」？`)) return;
     try {
       await minio.deleteBucket(name);
       await loadBuckets();
       if (bucket === name) { setBucket(''); setObjects([]); setTab(BUCKET_MGMT); }
-    } catch (e) {
-      showError('删除桶失败: ' + (e.response?.data?.error || e.message));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      showError('删除桶失败: ' + (err.response?.data?.error || err.message || ''));
     }
   };
 
   // ── 进入桶 ──
-  const enterBucket = (name) => {
+  const enterBucket = (name: string) => {
     setBucket(name);
     setPrefix('');
     setTab(BUCKET_DETAIL);
@@ -67,7 +72,7 @@ export default function MinioPage() {
   };
 
   // ── 列出对象 ──
-  const loadObjects = async (name, pfx) => {
+  const loadObjects = async (name?: string, pfx?: string) => {
     const b = name || bucket;
     const p = pfx !== undefined ? pfx : prefix;
     if (!b) return;
@@ -75,56 +80,60 @@ export default function MinioPage() {
     try {
       const { data } = await minio.listObjects(b, p);
       setObjects(data.objects || []);
-    } catch (e) {
-      showError('获取对象列表失败: ' + (e.response?.data?.error || e.message));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      showError('获取对象列表失败: ' + (err.response?.data?.error || err.message || ''));
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePrefixSearch = (e) => {
+  const handlePrefixSearch = (e: React.FormEvent) => {
     e.preventDefault();
     loadObjects(bucket, prefix);
   };
 
   // ── 上传对象 ──
-  const handleUpload = async (e) => {
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       await minio.uploadObject(bucket, file.name, file);
       await loadObjects(bucket, prefix);
-      showError('');
-    } catch (err) {
-      showError('上传失败: ' + (err.response?.data?.error || err.message));
+      setError('');
+    } catch (err: unknown) {
+      const e2 = err as { response?: { data?: { error?: string } }; message?: string };
+      showError('上传失败: ' + (e2.response?.data?.error || e2.message || ''));
     }
     e.target.value = '';
   };
 
   // ── 下载对象 ──
-  const handleDownload = (key) => {
+  const handleDownload = (key: string) => {
     window.open(minio.downloadUrl(bucket, key), '_blank');
   };
 
   // ── 复制预签名 URL ──
-  const handlePresigned = async (key) => {
+  const handlePresigned = async (key: string) => {
     try {
       const { data } = await minio.getPresignedUrl(bucket, key);
       await navigator.clipboard.writeText(data.presigned_url);
       alert('预签名 URL 已复制到剪贴板');
-    } catch (e) {
-      showError('获取预签名 URL 失败: ' + (e.response?.data?.error || e.message));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      showError('获取预签名 URL 失败: ' + (err.response?.data?.error || err.message || ''));
     }
   };
 
   // ── 删除对象 ──
-  const handleDeleteObject = async (key) => {
+  const handleDeleteObject = async (key: string) => {
     if (!confirm(`确定删除「${key}」？`)) return;
     try {
       await minio.deleteObject(bucket, key);
       await loadObjects(bucket, prefix);
-    } catch (e) {
-      showError('删除对象失败: ' + (e.response?.data?.error || e.message));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      showError('删除对象失败: ' + (err.response?.data?.error || err.message || ''));
     }
   };
 
@@ -139,7 +148,11 @@ export default function MinioPage() {
     <div style={{ padding: 24, fontFamily: 'system-ui, sans-serif' }}>
       <h1>🛠️ gotools — MinIO 管理</h1>
 
-      {error && <div style={{ background: '#fee', color: '#c00', padding: '8px 12px', borderRadius: 6, marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div style={{ background: '#fee', color: '#c00', padding: '8px 12px', borderRadius: 6, marginBottom: 12 }}>
+          {error}
+        </div>
+      )}
 
       {/* ── 桶管理 ── */}
       {tab === BUCKET_MGMT && (
@@ -164,7 +177,9 @@ export default function MinioPage() {
             <tbody>
               {buckets.map((b) => (
                 <tr key={b.name} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={tdStyle}><a href="#" onClick={(e) => { e.preventDefault(); enterBucket(b.name); }}>{b.name}</a></td>
+                  <td style={tdStyle}>
+                    <a href="#" onClick={(e) => { e.preventDefault(); enterBucket(b.name); }}>{b.name}</a>
+                  </td>
                   <td style={tdStyle}>{b.creation_date}</td>
                   <td style={tdStyle}>
                     <button onClick={() => enterBucket(b.name)} style={smBtn}>📂 打开</button>
@@ -187,7 +202,12 @@ export default function MinioPage() {
 
           <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
             <form onSubmit={handlePrefixSearch} style={{ display: 'flex', gap: 8 }}>
-              <input placeholder="前缀过滤" value={prefix} onChange={(e) => setPrefix(e.target.value)} style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #ccc' }} />
+              <input
+                placeholder="前缀过滤"
+                value={prefix}
+                onChange={(e) => setPrefix(e.target.value)}
+                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #ccc' }}
+              />
               <button type="submit" style={btnStyle}>🔍 搜索</button>
             </form>
             <label style={{ ...btnStyle, cursor: 'pointer', display: 'inline-block' }}>
@@ -232,7 +252,7 @@ export default function MinioPage() {
   );
 }
 
-function fmtSize(bytes) {
+function fmtSize(bytes: number): string {
   if (!bytes) return '0 B';
   const u = ['B', 'KB', 'MB', 'GB'];
   let i = 0;
@@ -241,15 +261,15 @@ function fmtSize(bytes) {
   return `${s.toFixed(i === 0 ? 0 : 1)} ${u[i]}`;
 }
 
-const btnStyle = {
+const btnStyle: React.CSSProperties = {
   padding: '8px 16px', borderRadius: 6, border: '1px solid #ccc',
   background: '#fff', cursor: 'pointer', fontSize: 14,
 };
 
-const smBtn = {
+const smBtn: React.CSSProperties = {
   padding: '4px 10px', borderRadius: 4, border: '1px solid #ddd',
   background: '#fff', cursor: 'pointer', fontSize: 13, marginRight: 4,
 };
 
-const thStyle = { padding: '8px 12px', fontWeight: 600, fontSize: 14 };
-const tdStyle = { padding: '8px 12px', fontSize: 14 };
+const thStyle: React.CSSProperties = { padding: '8px 12px', fontWeight: 600, fontSize: 14 };
+const tdStyle: React.CSSProperties = { padding: '8px 12px', fontSize: 14 };
