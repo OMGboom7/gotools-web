@@ -15,11 +15,6 @@ export interface BucketListResponse {
   buckets: BucketItem[];
 }
 
-export interface BucketCreateResponse {
-  name: string;
-  creation_date: string;
-}
-
 export interface ObjectItem {
   key: string;
   size: number;
@@ -46,6 +41,12 @@ export interface PresignedURLResponse {
   presigned_url: string;
 }
 
+// ── Health ──
+
+export function healthCheck() {
+  return client.get<{ status: string }>('/../healthz');
+}
+
 // ── Buckets ──
 
 export function listBuckets() {
@@ -53,7 +54,11 @@ export function listBuckets() {
 }
 
 export function createBucket(name: string) {
-  return client.put<BucketCreateResponse>(`/${encodeURIComponent(name)}`);
+  return client.put(`/${encodeURIComponent(name)}`);
+}
+
+export function bucketExists(name: string) {
+  return client.head(`/${encodeURIComponent(name)}`);
 }
 
 export function deleteBucket(name: string) {
@@ -93,10 +98,16 @@ export function getPresignedUrl(bucket: string, key: string, expiry = 3600) {
   );
 }
 
-export function downloadUrl(bucket: string, key: string): string {
+export function getDownloadUrl(bucket: string, key: string): string {
   return `${API_BASE}/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`;
 }
 
 export function deleteObject(bucket: string, key: string) {
   return client.delete(`/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`);
+}
+
+// ── Object info (HEAD) ──
+
+export function objectHead(bucket: string, key: string) {
+  return client.head(`/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`);
 }
